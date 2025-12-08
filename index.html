@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Constitutional Design for UI - Claude Adaptive Demo</title>
+  <meta name="description" content="An interactive prototype demonstrating how Claude could adapt its interface based on user learning styles.">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Constitutional Design for UI - Claude Adaptive Demo">
+  <meta property="og:description" content="See how Claude could adapt responses based on who you are.">
+  <meta property="og:type" content="website">
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+    #root {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const { ChevronDown, ChevronRight, Send, ArrowRight, Plus, X, Image, Paperclip, BookOpen, RotateCcw, Camera, PenTool, Code, FileText, Lightbulb, Zap, Info, Compass, ArrowUpRight, Trophy, Layers, Sparkles } = lucideReact;
+
+    const colors = {
+      bgPrimary: '#FAF9F7',
+      bgSidebar: '#F5F4F0',
+      textPrimary: '#1A1915',
+      textSecondary: '#6B6760',
+      textMuted: '#9B9690',
+      accent: '#D97757',
+      borderLight: '#E8E6E1',
+      borderMedium: '#D4D2CD',
+      userBubble: '#F0EFEB',
+      blue: '#3B82F6',
+      purple: '#8B5CF6',
+      green: '#22C55E'
+    };
+
+    const ClaudeIcon = ({ size = 20 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z" fill={colors.accent}/>
+      </svg>
+    );
+
+    // Feasibility badge component with tooltip
+    function FeasibilityBadge({ level, glow = true }) {
+      const [showTip, setShowTip] = useState(false);
+      const configs = {
+        now: { 
+          label: 'Buildable now', 
+          color: colors.green, 
+          bg: '#fff',
+          tooltip: "Can be implemented today using Claude's existing memory system and system prompts. No new infrastructure required."
+        },
+        near: { 
+          label: 'Near-term', 
+          color: colors.blue, 
+          bg: '#fff',
+          tooltip: 'Achievable with current artifact capabilities plus some UI/frontend work. Could be built within a few months.'
+        },
+        future: { 
+          label: 'Future vision', 
+          color: colors.purple, 
+          bg: '#fff',
+          tooltip: 'Requires new client-side infrastructure and deeper platform integration. Longer-term roadmap item.'
+        }
+      };
+      const config = configs[level];
+      return (
+        <span 
+          style={{ position: 'relative', display: 'inline-flex', zIndex: 100 }}
+          onMouseEnter={() => setShowTip(true)}
+          onMouseLeave={() => setShowTip(false)}
+        >
+          <span style={{ 
+            fontSize: 9, 
+            fontWeight: 600, 
+            padding: '3px 7px', 
+            borderRadius: 4, 
+            backgroundColor: config.bg, 
+            color: config.color,
+            textTransform: 'uppercase',
+            letterSpacing: '0.3px',
+            cursor: 'help',
+            border: '2px solid ' + config.color,
+            boxShadow: glow ? '0 0 12px ' + config.color + '60, 0 2px 8px rgba(0,0,0,0.15)' : 'none',
+            position: 'relative'
+          }}>
+            {config.label}
+          </span>
+          {showTip && (
+            <span style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              marginBottom: 8,
+              padding: '10px 12px',
+              backgroundColor: '#1a1a1a',
+              color: '#fff',
+              fontSize: 11,
+              lineHeight: 1.5,
+              borderRadius: 8,
+              width: 220,
+              textAlign: 'left',
+              zIndex: 1000,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              fontWeight: 400,
+              textTransform: 'none',
+              letterSpacing: 'normal'
+            }}>
+              <span style={{ fontWeight: 600, color: config.color, display: 'block', marginBottom: 4 }}>{config.label}</span>
+              {config.tooltip}
+              <span style={{
+                position: 'absolute',
+                top: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                border: '6px solid transparent',
+                borderTopColor: '#1a1a1a'
+              }}/>
+            </span>
+          )}
+        </span>
+      );
+    }
+
+    // Tooltip component
+    function Tooltip({ children, text }) {
+      const [show, setShow] = useState(false);
+      return (
+        <div style={{ position: 'relative', display: 'inline-flex' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+          {children}
+          {show && (
+            <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 8, padding: '6px 10px', backgroundColor: '#2D2D2D', color: '#fff', fontSize: 11, borderRadius: 6, whiteSpace: 'nowrap', zIndex: 100 }}>
+              {text}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Thinking indicator
+    function ThinkingState({ persona, expanded, onToggle }) {
+      const [dots, setDots] = useState('');
+      useEffect(() => {
+        const interval = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 400);
+        return () => clearInterval(interval);
+      }, []);
+      
+      const reasons = {
+        maya: { short: "Generating visual explanation based on learning preference", full: "Maya's profile indicates strong visual learning preference." },
+        james: { short: "Structuring detailed written explanation with glossary", full: "James prefers comprehensive written content." },
+        alex: { short: "Building interactive step-by-step tutorial", full: "Alex learns best by doing." }
+      };
+
+      return (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: colors.accent + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ClaudeIcon size={12}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: colors.textSecondary }}>Claude</span>
+              <span style={{ fontSize: 12, color: colors.accent, animation: 'pulse 1.5s infinite' }}>thinking{dots}</span>
+            </div>
+            <div style={{ backgroundColor: colors.bgSidebar, borderRadius: 10, padding: 12, border: '1px solid ' + colors.borderLight }}>
+              <button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+                {expanded ? <ChevronDown size={14} color={colors.textMuted}/> : <ChevronRight size={14} color={colors.textMuted}/>}
+                <span style={{ fontSize: 13, color: colors.textSecondary }}>{reasons[persona].short}</span>
+              </button>
+              {expanded && <p style={{ margin: '10px 0 0 20px', fontSize: 12, color: colors.textMuted, lineHeight: 1.6 }}>{reasons[persona].full}</p>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Beacons component - unified display of all follow-up types
+    function Beacons({ drillDown = [], sideways = [], broaden = [], onSelect }) {
+      const allItems = [
+        ...drillDown.map(text => ({ text, type: 'drillDown', color: colors.blue, icon: <ArrowRight size={10}/> })),
+        ...sideways.map(text => ({ text, type: 'sideways', color: colors.purple, icon: <Compass size={10}/> })),
+        ...broaden.map(text => ({ text, type: 'broaden', color: colors.green, icon: <ArrowUpRight size={10}/> }))
+      ];
+      
+      if (allItems.length === 0) return null;
+      
+      return (
+        <div style={{ marginTop: 16, padding: 14, backgroundColor: colors.bgSidebar, borderRadius: 12, border: '1px solid ' + colors.borderLight }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Continue exploring</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {allItems.map((item, i) => (
+              <button key={i} onClick={() => onSelect(item.text)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', backgroundColor: '#fff', border: '1px solid ' + item.color + '40', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: colors.textPrimary, fontFamily: 'inherit', transition: 'all 0.15s' }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = item.color + '10'; e.currentTarget.style.borderColor = item.color; }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.style.borderColor = item.color + '40'; }}>
+                <span style={{ color: item.color }}>{item.icon}</span>
+                {item.text}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Welcome Screen
+    function WelcomeScreen({ onSelectPrompt, persona }) {
+      const prompts = {
+        maya: [
+          { icon: <Lightbulb size={18}/>, text: "Explain how large language models work", cat: "Learn", active: true },
+          { icon: <PenTool size={18}/>, text: "Design a user flow for a meditation app", cat: "Create", active: false },
+        ],
+        james: [
+          { icon: <Lightbulb size={18}/>, text: "Explain how large language models work", cat: "Learn", active: true },
+          { icon: <FileText size={18}/>, text: "Write a guide to stoicism", cat: "Write", active: false },
+        ],
+        alex: [
+          { icon: <Lightbulb size={18}/>, text: "Explain how large language models work", cat: "Learn", active: true },
+          { icon: <Code size={18}/>, text: "Build a real-time chat with WebSockets", cat: "Code", active: true },
+        ],
+      };
+      
+      const names = {
+        maya: 'Maya',
+        james: 'James', 
+        alex: 'Alex'
+      };
+      
+      const greetings = {
+        maya: "Ready to visualize something?",
+        james: "Ready to explore ideas in depth?",
+        alex: "Ready to build something?"
+      };
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 32 }}>
+          <ClaudeIcon size={48}/>
+          <h1 style={{ fontSize: 28, fontWeight: 600, color: colors.textPrimary, marginTop: 16, marginBottom: 8 }}>Good afternoon, {names[persona]}</h1>
+          <p style={{ fontSize: 16, color: colors.textSecondary, maxWidth: 400, textAlign: 'center', marginBottom: 32 }}>{greetings[persona]}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, maxWidth: 520, width: '100%' }}>
+            {prompts[persona].map((p, i) => (
+              <button key={i} onClick={() => p.active && onSelectPrompt(p.text)} disabled={!p.active}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, backgroundColor: p.active ? '#fff' : colors.bgSidebar, border: '1px solid ' + colors.borderLight, borderRadius: 12, cursor: p.active ? 'pointer' : 'not-allowed', textAlign: 'left', fontFamily: 'inherit', opacity: p.active ? 1 : 0.5 }}>
+                <div style={{ color: p.active ? colors.accent : colors.textMuted, marginTop: 2 }}>{p.icon}</div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{p.cat}</span>
+                    {!p.active && <span style={{ fontSize: 9, padding: '2px 5px', backgroundColor: colors.borderLight, borderRadius: 4, color: colors.textMuted }}>Coming soon</span>}
+                  </div>
+                  <div style={{ fontSize: 14, color: colors.textPrimary, lineHeight: 1.4, marginTop: 4 }}>{p.text}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Input Bar
+    function InputBar({ persona, onSend, value, setValue, showMvp }) {
+      const [showSuggestions, setShowSuggestions] = useState(false);
+      
+      const configs = {
+        maya: { placeholder: "Describe what you want to visualize...", actions: [{ icon: <Image size={16}/>, tip: "Upload image" }, { icon: <Camera size={16}/>, tip: "Screenshot" }], suggestions: ["Show as diagram", "Make visual"] },
+        james: { placeholder: "What would you like to explore?", actions: [{ icon: <FileText size={16}/>, tip: "Upload doc" }, { icon: <BookOpen size={16}/>, tip: "Citations" }], suggestions: ["More detail", "Examples"] },
+        alex: { placeholder: "What do you want to build?", actions: [{ icon: <Code size={16}/>, tip: "Paste code" }, { icon: <Zap size={16}/>, tip: "Run code" }], suggestions: ["Let me try", "Show code"] }
+      };
+      const config = configs[persona];
+
+      return (
+        <div style={{ padding: '12px 32px 16px', borderTop: '1px solid ' + colors.borderLight, backgroundColor: colors.bgPrimary, flexShrink: 0 }}>
+          {showSuggestions && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              {config.suggestions.map((s, i) => (
+                <button key={i} onClick={() => { setValue(s); setShowSuggestions(false); }} style={{ padding: '8px 14px', backgroundColor: colors.accent + '10', border: '1px solid ' + colors.accent + '30', borderRadius: 20, cursor: 'pointer', fontSize: 13, color: colors.accent, fontFamily: 'inherit' }}>{s}</button>
+              ))}
+              {showMvp && <FeasibilityBadge level="now"/>}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, backgroundColor: '#fff', border: '1px solid ' + colors.borderMedium, borderRadius: 24, padding: '8px 8px 8px 20px', position: 'relative' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {config.actions.map((a, i) => (
+                <Tooltip key={i} text={a.tip}>
+                  <button style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: colors.textMuted }}>{a.icon}</button>
+                </Tooltip>
+              ))}
+            </div>
+            {showMvp && (
+              <div style={{ position: 'absolute', top: -8, left: 20 }}>
+                <FeasibilityBadge level="future"/>
+              </div>
+            )}
+            <div style={{ width: 1, height: 24, backgroundColor: colors.borderLight }}/>
+            <input type="text" value={value} onChange={e => setValue(e.target.value)} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} placeholder={config.placeholder} style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, color: colors.textPrimary, backgroundColor: 'transparent', fontFamily: 'inherit' }} onKeyDown={e => { if (e.key === 'Enter' && value.trim()) onSend(value); }}/>
+            <button onClick={() => value.trim() && onSend(value)} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', backgroundColor: value.trim() ? colors.accent : colors.borderLight, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <Send size={16} color={value.trim() ? '#fff' : colors.textMuted}/>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Response Header with expanded reasoning
+    function ResponseHeader({ persona, showReasoning, onToggle, showMvp }) {
+      const reasoning = {
+        maya: {
+          short: "Visual learner → Interactive diagram",
+          memory: "Prefers diagrams, infographics, and visual explanations. Learns best when information is color-coded and spatially organized.",
+          rule: `if (user.learningStyle === "visual") {\n  response.format = "interactive-diagram";\n  response.features = ["color-coding", "hover-to-explore", "minimal-text"];\n}`,
+          components: ["Interactive flow diagram", "Color-coded stages (blue→purple→green)", "Tap-to-zoom detail modals", "Visual legend"],
+          inputAdaptations: ["Image upload", "Screenshot capture", "Drawing tools", "Visual suggestion chips"]
+        },
+        james: {
+          short: "Deep reader → Structured prose",
+          memory: "Prefers comprehensive written explanations with proper structure. Values depth, nuance, and being able to explore terminology.",
+          rule: `if (user.learningStyle === "reading") {\n  response.format = "structured-prose";\n  response.features = ["glossary-terms", "numbered-sections", "citations"];\n}`,
+          components: ["Numbered sections with headers", "Interactive glossary terms", "Block quotes for key insights", "Related concept tags"],
+          inputAdaptations: ["Document upload", "Citation tools", "Reference attachments", "Depth suggestion chips"]
+        },
+        alex: {
+          short: "Hands-on → Step-by-step tutorial",
+          memory: "Learns by doing. Prefers interactive tutorials where they can experiment and see immediate results.",
+          rule: `if (user.learningStyle === "kinesthetic") {\n  response.format = "interactive-tutorial";\n  response.features = ["live-input", "step-progress", "sandbox"];\n}`,
+          components: ["5-step interactive flow", "Live text input field", "Real-time tokenization", "Progress tracking with checkmarks"],
+          inputAdaptations: ["Code paste", "Run in sandbox", "Project upload", "Hands-on suggestion chips"]
+        }
+      };
+      
+      const r = reasoning[persona];
+      
+      return (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: showReasoning ? 12 : 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: colors.textSecondary }}>Claude</span>
+            <button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', backgroundColor: showReasoning ? colors.purple + '15' : 'transparent', border: '1px solid ' + (showReasoning ? colors.purple : colors.borderLight), borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, color: showReasoning ? colors.purple : colors.textMuted }}>
+              <Info size={12}/> Why this format?
+              {showReasoning ? <ChevronDown size={12}/> : <ChevronRight size={12}/>}
+            </button>
+            {!showReasoning && <span style={{ fontSize: 11, color: colors.textMuted, fontStyle: 'italic' }}>{r.short}</span>}
+            {showMvp && !showReasoning && <FeasibilityBadge level="now"/>}
+          </div>
+          
+          {showReasoning && (
+            <div style={{ backgroundColor: colors.bgSidebar, borderRadius: 12, padding: 16, border: '1px solid ' + colors.borderLight }}>
+              {/* Memory */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.accent }}/>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Claude's Memory</span>
+                  {showMvp && <FeasibilityBadge level="now"/>}
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: colors.textPrimary, lineHeight: 1.5, paddingLeft: 12 }}>{r.memory}</p>
+              </div>
+              
+              {/* Rule Applied */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.purple }}/>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>UI Constitution Rule</span>
+                  {showMvp && <FeasibilityBadge level="now"/>}
+                </div>
+                <pre style={{ margin: 0, fontSize: 11, color: '#E8E6E1', backgroundColor: '#2D2D2D', padding: 12, borderRadius: 8, overflow: 'auto', lineHeight: 1.5 }}>{r.rule}</pre>
+              </div>
+              
+              {/* Components Generated */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.blue }}/>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Components Generated</span>
+                  {showMvp && <FeasibilityBadge level="near"/>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 12 }}>
+                  {r.components.map((c, i) => (
+                    <span key={i} style={{ fontSize: 11, padding: '4px 10px', backgroundColor: colors.blue + '15', color: colors.blue, borderRadius: 6 }}>{c}</span>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Input Adaptations */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.green }}/>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Input Bar Adaptations</span>
+                  {showMvp && <FeasibilityBadge level="future"/>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 12 }}>
+                  {r.inputAdaptations.map((a, i) => (
+                    <span key={i} style={{ fontSize: 11, padding: '4px 10px', backgroundColor: colors.green + '15', color: colors.green, borderRadius: 6 }}>{a}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Maya Response
+    function MayaResponse({ onFollowUp, showMvp }) {
+      const [active, setActive] = useState(null);
+      const [modal, setModal] = useState(null);
+      
+      const stages = [
+        { id: 'input', label: 'Input', color: colors.blue, short: 'Text arrives as characters', 
+          full: "Your message arrives as a sequence of Unicode characters. Before any AI processing can happen, this raw text needs to be converted into numerical representations that neural networks can work with. Each character is initially just a code point — \"Hello\" is [72, 101, 108, 108, 111].",
+          icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+        { id: 'tokenize', label: 'Tokenize', color: colors.purple, short: 'Text splits into tokens', 
+          full: "Tokenization breaks text into subword units using Byte-Pair Encoding (BPE). Rather than whole words, the model works with pieces: \"understanding\" → [\"under\", \"stand\", \"ing\"]. This balances vocabulary size (~100K tokens) with the ability to handle any word, even novel ones.",
+          icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg> },
+        { id: 'embed', label: 'Embed', color: colors.purple, short: 'Tokens become vectors', 
+          full: "Each token maps to a dense vector of 768-12,288 numbers called an embedding. These vectors encode semantic meaning geometrically — similar concepts cluster together. \"King\" and \"Queen\" are closer in this space than \"King\" and \"Banana\". This enables mathematical operations on meaning.",
+          icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><circle cx="5" cy="19" r="2"/><line x1="12" y1="9" x2="12" y2="5"/><line x1="14.5" y1="13.5" x2="17" y2="17"/><line x1="9.5" y1="13.5" x2="7" y2="17"/></svg> },
+        { id: 'attention', label: 'Attention', color: colors.purple, short: '96 layers learn relationships', 
+          full: "The transformer's core mechanism. Each of the 96 layers contains attention heads that learn which words relate to which others. When processing \"The cat sat on the mat\", the model learns \"sat\" relates strongly to \"cat\" (who sat) and \"mat\" (where). This happens in parallel across all positions.",
+          icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg> },
+        { id: 'predict', label: 'Output', color: colors.green, short: 'Model predicts next token', 
+          full: "The final layer converts the processed representations into probabilities for every possible next token. Given \"The capital of France is\", the model might output: \"Paris\" (73%), \"the\" (8%), \"located\" (4%)... The chosen token is sampled from this distribution, then the process repeats.",
+          icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> }
+      ];
+
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <p style={{ margin: 0, color: colors.textSecondary }}>Here's how your words flow through an LLM — tap any stage to explore:</p>
+            {showMvp && <FeasibilityBadge level="near"/>}
+          </div>
+          <div style={{ background: 'linear-gradient(180deg, #FAFBFC, #F5F7FA)', borderRadius: 16, border: '1px solid #E5E7EB', padding: '20px 16px', marginBottom: 16, position: 'relative' }}>
+            {/* Dot grid background */}
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(#E5E7EB 1px, transparent 0)', backgroundSize: '16px 16px', opacity: 0.5, pointerEvents: 'none', borderRadius: 16 }}/>
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+              {stages.map((stage, i) => (
+                <React.Fragment key={stage.id}>
+                  <div onClick={() => setActive(active === stage.id ? null : stage.id)} style={{ width: '100%', padding: '12px 14px', background: 'linear-gradient(135deg, ' + stage.color + '08, ' + stage.color + '15)', border: '2px solid ' + (active === stage.id ? stage.color : stage.color + '40'), borderRadius: 12, cursor: 'pointer', boxSizing: 'border-box', transition: 'all 0.2s', transform: active === stage.id ? 'scale(1.01)' : 'scale(1)', boxShadow: active === stage.id ? '0 4px 12px ' + stage.color + '25' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, ' + stage.color + ', ' + stage.color + 'dd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px ' + stage.color + '40' }}>
+                        {stage.icon}
+                      </div>
+                      <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: stage.color, textTransform: 'uppercase', letterSpacing: '0.3px' }}>{stage.label}</div>
+                        <div style={{ fontSize: 12, color: colors.textSecondary }}>{stage.short}</div>
+                      </div>
+                      {active === stage.id && <button onClick={e => { e.stopPropagation(); setModal(stage.id); }} style={{ padding: '5px 12px', backgroundColor: stage.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>Learn more →</button>}
+                    </div>
+                  </div>
+                  {i < stages.length - 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ width: 2, height: 16, background: 'linear-gradient(to bottom, ' + stage.color + '60, ' + stages[i+1].color + '60)' }}/>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 16, paddingTop: 14, borderTop: '1px solid #E5E7EB', flexWrap: 'wrap', position: 'relative' }}>
+              {[{ c: colors.blue, l: 'Input' }, { c: colors.purple, l: 'Processing' }, { c: colors.green, l: 'Output' }].map((x, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: x.c, boxShadow: '0 0 6px ' + x.c + '50' }}/><span style={{ fontSize: 11, color: colors.textMuted, fontWeight: 500 }}>{x.l}</span></div>
+              ))}
+            </div>
+          </div>
+          <Beacons 
+            drillDown={["Attention mechanism deep-dive", "How embeddings capture meaning"]} 
+            sideways={["How does this compare to human cognition?"]} 
+            broaden={["Future of AI"]}
+            onSelect={onFollowUp}
+          />
+          {modal && (
+            <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 400, width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: stages.find(s => s.id === modal)?.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {stages.find(s => s.id === modal)?.icon}
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: 16, color: colors.textPrimary }}>{stages.find(s => s.id === modal)?.label}</h3>
+                  </div>
+                  <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><X size={18} color={colors.textMuted}/></button>
+                </div>
+                <p style={{ margin: 0, color: colors.textSecondary, lineHeight: 1.7 }}>{stages.find(s => s.id === modal)?.full}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // James Response
+    function JamesResponse({ onFollowUp, showMvp }) {
+      const [expanded, setExpanded] = useState(null);
+      const glossary = {
+        tokens: { title: 'Tokens', def: "The atomic units that LLMs process. Rather than whole words, models typically use subword units — \"understanding\" might become [\"under\", \"stand\", \"ing\"]. GPT-4 uses approximately 100,000 unique tokens. This approach balances vocabulary size with the ability to handle novel words." },
+        transformer: { title: 'Transformer', def: "The neural network architecture introduced in 2017's \"Attention Is All You Need\" paper. Its key innovation was replacing sequential processing with parallel self-attention, allowing models to consider all parts of the input simultaneously. This architecture underlies GPT, Claude, and virtually all modern LLMs." },
+        attention: { title: 'Attention', def: "The mechanism that allows models to weigh the importance of different input tokens dynamically. In self-attention, each position can \"attend to\" every other position, learning contextual relationships. Multi-head attention runs several attention operations in parallel, capturing different types of relationships." },
+        parameters: { title: 'Parameters', def: "The learned numerical weights in a neural network — essentially the model's \"knowledge\" encoded as numbers. GPT-4 reportedly has ~1.76 trillion parameters. More parameters generally enable more nuanced understanding, but also require more computation and training data." },
+        embedding: { title: 'Embedding', def: "A dense vector representation of a token in high-dimensional space (typically 768-12,288 dimensions). Similar concepts cluster together — \"king\" and \"queen\" are closer than \"king\" and \"bicycle\". These geometric relationships enable semantic reasoning." }
+      };
+      
+      const Term = ({ id, children }) => (
+        <span style={{ position: 'relative', display: 'inline' }}>
+          <button onClick={() => setExpanded(expanded === id ? null : id)} style={{ background: expanded === id ? colors.accent + '20' : 'transparent', border: 'none', borderBottom: '2px dotted ' + colors.accent, color: 'inherit', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: '0 2px' }}>
+            {children}<span style={{ marginLeft: 2, fontSize: 10, opacity: 0.6 }}>↗</span>
+          </button>
+          {expanded === id && glossary[id] && (
+            <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: 8, width: 280, background: '#fff', borderRadius: 10, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', border: '1px solid ' + colors.borderLight, zIndex: 100 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.accent }}>{glossary[id].title}</h4>
+                <button onClick={() => setExpanded(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}><X size={14} color={colors.textMuted}/></button>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: colors.textSecondary, lineHeight: 1.6 }}>{glossary[id].def}</p>
+            </div>
+          )}
+        </span>
+      );
+
+      return (
+        <div onClick={() => expanded && setExpanded(null)}>
+          <p style={{ marginBottom: 16, color: colors.textPrimary, lineHeight: 1.8 }}>
+            Large Language Models represent a fundamental shift in how we approach artificial intelligence. Rather than programming explicit rules, we train neural networks on vast text corpora to predict and generate language. Here's a systematic breakdown of how they work.
+          </p>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600 }}>💡 Click underlined terms to explore definitions</span>
+            {showMvp && <FeasibilityBadge level="near"/>}
+          </div>
+          
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.textPrimary, marginBottom: 8, marginTop: 20 }}>1. The Core Architecture</h3>
+          <p style={{ marginBottom: 16, color: colors.textPrimary, lineHeight: 1.8 }}>
+            Modern LLMs are built on the <Term id="transformer">transformer</Term> architecture. Unlike earlier recurrent models that processed text sequentially, transformers use <Term id="attention">attention mechanisms</Term> to process all <Term id="tokens">tokens</Term> in parallel, dramatically improving both training speed and the model's ability to capture long-range dependencies.
+          </p>
+          
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.textPrimary, marginBottom: 8, marginTop: 20 }}>2. From Text to Numbers</h3>
+          <p style={{ marginBottom: 16, color: colors.textPrimary, lineHeight: 1.8 }}>
+            Before processing, text is converted to numerical representations. Each token maps to an <Term id="embedding">embedding</Term> — a high-dimensional vector where semantic relationships are encoded geometrically. Words with similar meanings cluster together in this space.
+          </p>
+          
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.textPrimary, marginBottom: 8, marginTop: 20 }}>3. Scale and Capability</h3>
+          <p style={{ marginBottom: 16, color: colors.textPrimary, lineHeight: 1.8 }}>
+            Modern LLMs contain billions of <Term id="parameters">parameters</Term>. This scale, combined with training on trillions of tokens, enables emergent capabilities — behaviors that arise from scale rather than explicit programming.
+          </p>
+
+          <div style={{ borderLeft: '3px solid ' + colors.accent, backgroundColor: colors.accent + '08', padding: '14px 18px', borderRadius: '0 8px 8px 0', marginBottom: 16 }}>
+            <p style={{ margin: 0, fontStyle: 'italic', color: colors.textSecondary, lineHeight: 1.6 }}>
+              <strong style={{ color: colors.textPrimary }}>Key insight:</strong> LLMs are fundamentally sophisticated pattern matchers, not reasoning engines. They predict likely continuations based on statistical patterns in training data, which can produce remarkably coherent and useful outputs — but also confident-sounding errors.
+            </p>
+          </div>
+          
+          <Beacons 
+            drillDown={["Explain attention in depth", "How is training done?"]} 
+            sideways={["What can't LLMs do?"]} 
+            broaden={["Future directions in AI"]}
+            onSelect={onFollowUp}
+          />
+        </div>
+      );
+    }
+
+    // Alex Response
+    function AlexResponse({ onFollowUp, showMvp }) {
+      const [input, setInput] = useState('');
+      const [step, setStep] = useState(1);
+      const [completed, setCompleted] = useState([]);
+      const [showComplete, setShowComplete] = useState(false);
+      
+      const tokenize = text => text ? text.split(/(\s+|'|,|\.|\!)/).filter(x => x.trim()) : [];
+      const tokens = tokenize(input);
+      
+      const next = () => { if (step < 5) { setCompleted([...completed, step]); setStep(step + 1); } else setShowComplete(true); };
+      const back = () => { if (step > 1) { setCompleted(completed.filter(s => s !== step - 1)); setStep(step - 1); } };
+      const reset = () => { setStep(1); setCompleted([]); setInput(''); setShowComplete(false); };
+      
+      const steps = [{ n: 1, t: 'Input' }, { n: 2, t: 'Tokenize' }, { n: 3, t: 'Embed' }, { n: 4, t: 'Process' }, { n: 5, t: 'Output' }];
+
+      if (showComplete) {
+        return (
+          <div>
+            <div style={{ textAlign: 'center', padding: 32, backgroundColor: colors.green + '08', borderRadius: 16, border: '1px solid ' + colors.green + '30', marginBottom: 20 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', backgroundColor: colors.green, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}><Trophy size={28} color="#fff"/></div>
+              <h3 style={{ margin: '0 0 8px', fontSize: 18, color: colors.textPrimary }}>Tutorial Complete! 🎉</h3>
+              <p style={{ margin: '0 0 20px', color: colors.textSecondary }}>You traced the full pipeline!</p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button onClick={reset} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', backgroundColor: '#fff', border: '1px solid ' + colors.borderLight, borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, color: colors.textPrimary }}><RotateCcw size={14}/>Try again</button>
+                <button onClick={() => onFollowUp("Build a transformer")} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', backgroundColor: colors.accent, border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, color: '#fff', fontWeight: 500 }}><Code size={14}/>Build one</button>
+              </div>
+            </div>
+            <Beacons 
+              drillDown={["Build a minimal transformer", "Implement attention from scratch"]} 
+              sideways={["How does fine-tuning work?", "What is RLHF?"]} 
+              onSelect={onFollowUp}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <p style={{ margin: 0, color: colors.textPrimary, lineHeight: 1.7 }}>Let's learn by doing. Complete each step.</p>
+            {showMvp && <FeasibilityBadge level="near"/>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
+            {steps.map((s, i) => (
+              <React.Fragment key={s.n}>
+                <button onClick={() => setStep(s.n)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 8px', borderRadius: 8, border: 'none', background: step === s.n ? colors.accent + '15' : 'transparent', cursor: 'pointer', minWidth: 48, flexShrink: 0 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: completed.includes(s.n) ? colors.green : step === s.n ? colors.accent : colors.borderLight, color: completed.includes(s.n) || step === s.n ? '#fff' : colors.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600 }}>{completed.includes(s.n) ? '✓' : s.n}</div>
+                  <div style={{ fontSize: 9, fontWeight: step === s.n ? 600 : 400, color: step === s.n ? colors.accent : colors.textMuted }}>{s.t}</div>
+                </button>
+                {i < 4 && <div style={{ width: 12, height: 2, background: completed.includes(s.n) ? colors.green : colors.borderLight, flexShrink: 0 }}/>}
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid ' + colors.borderLight, padding: 16, marginBottom: 12 }}>
+            {step === 1 && (
+              <div>
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: colors.textPrimary }}>Step 1: Enter Your Text</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 13, color: colors.textSecondary }}>Type anything to trace through the pipeline.</p>
+                <input type="text" value={input} onChange={e => setInput(e.target.value)} placeholder="e.g., Hello world!" style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '2px solid ' + colors.borderLight, borderRadius: 8, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}/>
+                <p style={{ margin: '8px 0 0', fontSize: 11, color: colors.textMuted }}>{input ? input.length + ' chars → ready' : 'Type something...'}</p>
+              </div>
+            )}
+            {step === 2 && (
+              <div>
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: colors.textPrimary }}>Step 2: Tokenization</h4>
+                <div style={{ marginBottom: 12, padding: 10, background: colors.bgSidebar, borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>Your input:</div>
+                  <div style={{ fontSize: 13, color: colors.textPrimary, wordBreak: 'break-word' }}>"{input || 'Hello world!'}"</div>
+                </div>
+                <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>Splits into {tokens.length || 2} tokens:</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {(tokens.length ? tokens : ['Hello', 'world!']).map((t, i) => (
+                    <span key={i} style={{ padding: '4px 10px', backgroundColor: colors.purple + '15', color: colors.purple, borderRadius: 6, fontSize: 12, fontFamily: 'monospace' }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 3 && (
+              <div>
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: colors.textPrimary }}>Step 3: Embedding</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 13, color: colors.textSecondary }}>Each token → 768-dimensional vector</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(tokens.length ? tokens.slice(0, 3) : ['Hello', 'world']).map((t, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ padding: '3px 8px', backgroundColor: colors.purple + '15', color: colors.purple, borderRadius: 4, fontSize: 11, fontFamily: 'monospace', flexShrink: 0 }}>{t}</span>
+                      <span style={{ color: colors.textMuted }}>→</span>
+                      <span style={{ fontSize: 10, color: colors.textMuted, fontFamily: 'monospace', wordBreak: 'break-all' }}>[{Array(5).fill(0).map(() => (Math.random() * 2 - 1).toFixed(3)).join(', ')}...]</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 4 && (
+              <div>
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: colors.textPrimary }}>Step 4: Attention Layers</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 13, color: colors.textSecondary }}>96 layers learn which words relate</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {Array(12).fill(0).map((_, i) => (
+                    <div key={i} style={{ width: 32, height: 32, borderRadius: 6, backgroundColor: i < 4 ? colors.accent : colors.borderLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: i < 4 ? '#fff' : colors.textMuted, fontWeight: 600 }}>{i + 1}</div>
+                  ))}
+                  <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: colors.textMuted }}>...</div>
+                </div>
+                <p style={{ margin: '12px 0 0', fontSize: 11, color: colors.textMuted, textAlign: 'center' }}>Processing layer 4 of 96...</p>
+              </div>
+            )}
+            {step === 5 && (
+              <div>
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: colors.textPrimary }}>Step 5: Prediction</h4>
+                <div style={{ padding: 12, background: colors.green + '08', borderRadius: 8, border: '1px solid ' + colors.green + '30' }}>
+                  <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 10, wordBreak: 'break-word' }}>After "{input || 'Hello'}", most likely:</div>
+                  {[{ w: 'world', p: 23 }, { w: 'there', p: 18 }, { w: '!', p: 15 }].map((x, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                      <span style={{ fontSize: 12, width: 42, fontFamily: 'monospace', flexShrink: 0 }}>{x.w}</span>
+                      <div style={{ flex: 1, height: 6, background: colors.green + '20', borderRadius: 3, overflow: 'hidden', minWidth: 40 }}><div style={{ width: x.p * 2.5 + '%', height: '100%', background: colors.green, borderRadius: 3 }}/></div>
+                      <span style={{ fontSize: 10, color: colors.green, fontWeight: 600, flexShrink: 0 }}>{x.p}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <button onClick={back} disabled={step === 1} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid ' + colors.borderLight, background: step === 1 ? colors.bgSidebar : '#fff', color: step === 1 ? colors.textMuted : colors.textPrimary, cursor: step === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← Back</button>
+            <button onClick={reset} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 6, border: 'none', background: 'transparent', color: colors.textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}><RotateCcw size={12}/>Reset</button>
+            <button onClick={next} disabled={step === 1 && !input.trim()} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', borderRadius: 6, border: 'none', background: (step === 1 && !input.trim()) ? colors.borderLight : colors.accent, color: '#fff', cursor: (step === 1 && !input.trim()) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 500 }}>{step === 5 ? 'Complete!' : 'Next'}{step < 5 && <ArrowRight size={12}/>}</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Main Component
+    function ClaudeAdaptiveDemo() {
+      const [persona, setPersona] = useState('maya');
+      const [view, setView] = useState('welcome');
+      const [message, setMessage] = useState('');
+      const [inputValue, setInputValue] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      const [thinkingExpanded, setThinkingExpanded] = useState(false);
+      const [showReasoning, setShowReasoning] = useState(false);
+      const [showMvp, setShowMvp] = useState(false);
+      const [formatOverride, setFormatOverride] = useState(null);
+      
+      const personas = [{ id: 'maya', name: 'Maya', style: 'Visual' }, { id: 'james', name: 'James', style: 'Reading' }, { id: 'alex', name: 'Alex', style: 'Hands-On' }];
+      
+      const selectPrompt = text => { setMessage(text); setIsLoading(true); setView('chat'); setFormatOverride(null); setTimeout(() => setIsLoading(false), 2000); };
+      const send = text => { setMessage(text); setInputValue(''); setIsLoading(true); setView('chat'); setTimeout(() => setIsLoading(false), 2000); };
+      const reset = () => { setView('welcome'); setMessage(''); setInputValue(''); setIsLoading(false); setShowReasoning(false); setFormatOverride(null); };
+
+      const effectiveFormat = formatOverride || (persona === 'maya' ? 'visual' : persona === 'alex' ? 'interactive' : 'text');
+
+      return (
+        <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', display: 'flex', height: '100vh', borderRadius: 12, overflow: 'hidden', border: '1px solid ' + colors.borderLight, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', position: 'relative' }}>
+          <style>{`
+            @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+          `}</style>
+          
+          {showMvp && (
+            <div onClick={() => setShowMvp(false)} style={{ position: 'absolute', inset: 0, zIndex: 5, cursor: 'pointer' }}/>
+          )}
+          
+          {/* Sidebar */}
+          <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid ' + colors.borderLight, backgroundColor: colors.bgSidebar, zIndex: 10 }}>
+            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid ' + colors.borderLight }}>
+              <ClaudeIcon size={22}/><span style={{ fontSize: 17, fontWeight: 600, color: colors.textPrimary }}>Claude</span>
+            </div>
+            <div style={{ padding: '10px 14px' }}>
+              <button onClick={reset} style={{ width: '100%', padding: '9px 14px', backgroundColor: colors.bgPrimary, border: '1px solid ' + colors.borderLight, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: colors.textPrimary, fontFamily: 'inherit' }}><Plus size={15}/>New chat</button>
+            </div>
+            <div style={{ padding: '6px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, padding: '0 4px' }}>Recent</div>
+              {['How do LLMs work?', 'Design review', 'Code help'].map((c, i) => (
+                <div key={i} onClick={() => i === 0 && selectPrompt('Explain how large language models work')} style={{ padding: '7px 10px', borderRadius: 6, cursor: i === 0 ? 'pointer' : 'default', fontSize: 13, color: colors.textSecondary, backgroundColor: i === 0 && view === 'chat' ? colors.accent + '10' : 'transparent', opacity: i === 0 ? 1 : 0.5 }}>{c}</div>
+              ))}
+            </div>
+            <div style={{ flex: 1 }}/>
+            
+            {/* Demo Controls */}
+            <div style={{ margin: 14, padding: 14, backgroundColor: colors.bgPrimary, borderRadius: 10, border: '1px solid ' + colors.borderLight }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Zap size={16} color={colors.accent}/>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.textPrimary }}>Demo Mode</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setShowMvp(!showMvp)}
+                style={{ 
+                  width: '100%', 
+                  padding: '8px 10px', 
+                  marginBottom: 10,
+                  backgroundColor: showMvp ? colors.blue + '15' : 'transparent', 
+                  border: '1px solid ' + (showMvp ? colors.blue : colors.borderLight), 
+                  borderRadius: 6, 
+                  cursor: 'pointer', 
+                  fontSize: 11, 
+                  color: showMvp ? colors.blue : colors.textSecondary,
+                  fontFamily: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Layers size={12}/>
+                {showMvp ? 'Hide' : 'Show'} feasibility notes
+              </button>
+              
+              <div style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 8, lineHeight: 1.4 }}>Switch persona to see adaptive UI:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {personas.map(p => {
+                  const sel = persona === p.id;
+                  return (
+                    <button key={p.id} onClick={() => { setPersona(p.id); setFormatOverride(null); }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', borderRadius: 7, border: 'none', backgroundColor: sel ? colors.accent + '15' : 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', border: '2px solid ' + (sel ? colors.accent : colors.borderMedium), backgroundColor: sel ? colors.accent : 'transparent' }}/>
+                      <div><div style={{ fontSize: 12, fontWeight: sel ? 600 : 400, color: sel ? colors.accent : colors.textPrimary }}>{p.name}</div><div style={{ fontSize: 10, color: colors.textMuted }}>{p.style}</div></div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {showMvp && (
+              <div style={{ margin: '0 14px 14px', padding: 12, backgroundColor: '#fff', borderRadius: 8, border: '1px solid ' + colors.borderLight }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Implementation Phases</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FeasibilityBadge level="now"/>
+                    <span style={{ fontSize: 10, color: colors.textSecondary }}>Memory + prompts</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FeasibilityBadge level="near"/>
+                    <span style={{ fontSize: 10, color: colors.textSecondary }}>Artifacts + UI work</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FeasibilityBadge level="future"/>
+                    <span style={{ fontSize: 10, color: colors.textSecondary }}>New infra needed</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Main */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.bgPrimary, position: 'relative', zIndex: showMvp ? 6 : 1 }}>
+            {showMvp && (
+              <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.6)', zIndex: 8, pointerEvents: 'none' }}/>
+            )}
+            {view === 'welcome' ? (
+              <>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <WelcomeScreen onSelectPrompt={selectPrompt} persona={persona}/>
+                </div>
+                <InputBar persona={persona} onSend={send} value={inputValue} setValue={setInputValue} showMvp={showMvp}/>
+              </>
+            ) : (
+              <>
+                <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}><div style={{ maxWidth: '85%', backgroundColor: colors.userBubble, padding: '10px 14px', borderRadius: 14, fontSize: 13, lineHeight: 1.5, color: colors.textPrimary, wordBreak: 'break-word' }}>{message}</div></div>
+                  {isLoading ? (
+                    <ThinkingState persona={persona} expanded={thinkingExpanded} onToggle={() => setThinkingExpanded(!thinkingExpanded)}/>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: colors.accent + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ClaudeIcon size={12}/></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <ResponseHeader persona={persona} showReasoning={showReasoning} onToggle={() => setShowReasoning(!showReasoning)} showMvp={showMvp}/>
+                        
+                        {!isLoading && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, color: colors.textMuted }}>Format:</span>
+                            {[
+                              { id: 'visual', label: 'Visual', icon: <Image size={10}/> },
+                              { id: 'text', label: 'Text', icon: <FileText size={10}/> },
+                              { id: 'interactive', label: 'Interactive', icon: <Code size={10}/> }
+                            ].map(f => (
+                              <button
+                                key={f.id}
+                                onClick={() => setFormatOverride(f.id === effectiveFormat && formatOverride ? null : f.id)}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '4px 10px',
+                                  fontSize: 11,
+                                  border: '1px solid ' + (effectiveFormat === f.id ? colors.accent : colors.borderLight),
+                                  borderRadius: 12,
+                                  backgroundColor: effectiveFormat === f.id ? colors.accent + '10' : '#fff',
+                                  color: effectiveFormat === f.id ? colors.accent : colors.textSecondary,
+                                  cursor: 'pointer',
+                                  fontFamily: 'inherit'
+                                }}
+                              >
+                                {f.icon} {f.label}
+                                {effectiveFormat === f.id && !formatOverride && <span style={{ fontSize: 9, opacity: 0.7 }}>(auto)</span>}
+                              </button>
+                            ))}
+                            {showMvp && <FeasibilityBadge level="now"/>}
+                          </div>
+                        )}
+                        
+                        <div style={{ fontSize: 14, lineHeight: 1.7, color: colors.textPrimary }}>
+                          {effectiveFormat === 'visual' && <MayaResponse onFollowUp={t => setInputValue(t)} showMvp={showMvp}/>}
+                          {effectiveFormat === 'text' && <JamesResponse onFollowUp={t => setInputValue(t)} showMvp={showMvp}/>}
+                          {effectiveFormat === 'interactive' && <AlexResponse onFollowUp={t => setInputValue(t)} showMvp={showMvp}/>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <InputBar persona={persona} onSend={send} value={inputValue} setValue={setInputValue} showMvp={showMvp}/>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<ClaudeAdaptiveDemo />, document.getElementById('root'));
+  </script>
+</body>
+</html>
